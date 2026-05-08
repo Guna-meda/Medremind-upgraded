@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "bycicle-rental-app",
-    "slug": "bycicle-rental-app",
+    "name": "MedRemind",
+    "slug": "medremind",
     "version": "1.0.0",
+    "description": "A medication reminder app .",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
@@ -38,14 +39,14 @@
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "guna_meda",
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "cd33903f-4759-42e3-86e3-f696bbf153f6"
+        "projectId": "df9e56ff-5156-405a-86b9-f89c0d52feb2"
       }
-    },
-    "owner": "guna_meda"
+    }
   }
 }

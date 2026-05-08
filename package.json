@@ -5,8 +5,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
     "lint": "expo lint"
@@ -53,9 +53,9 @@
     "react-native-reanimated": "~3.16.1",
     "react-native-safe-area-context": "^5.0.0",
     "react-native-screens": "~4.1.0",
-    "react-native-svg": "^15.10.1",
+    "react-native-svg": "15.8.0",
     "react-native-web": "~0.19.13",
-    "react-native-webview": "^13.12.5",
+    "react-native-webview": "13.12.5",
     "viem": "^2.21.55"
   },
   "devDependencies": {

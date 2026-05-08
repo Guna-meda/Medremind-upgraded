@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cancelMedicationReminders } from "./nativeAlarm";
 
 const MEDICATIONS_KEY = "@medications";
 const DOSE_HISTORY_KEY = "@dose_history";
@@ -12,6 +13,7 @@ export interface Medication {
   duration: string;
   color: string;
   reminderEnabled: boolean;
+  alarmEnabled: boolean;
   currentSupply: number;
   totalSupply: number;
   refillAt: number;
@@ -67,6 +69,7 @@ export async function updateMedication(
 
 export async function deleteMedication(id: string): Promise<void> {
   try {
+    await cancelMedicationReminders(id);
     const medications = await getMedications();
     const updatedMedications = medications.filter((med) => med.id !== id);
     await AsyncStorage.setItem(
@@ -136,6 +139,8 @@ export async function recordDose(
 
 export async function clearAllData(): Promise<void> {
   try {
+    const medications = await getMedications();
+    await Promise.all(medications.map((med) => cancelMedicationReminders(med.id)));
     await AsyncStorage.multiRemove([MEDICATIONS_KEY, DOSE_HISTORY_KEY]);
   } catch (error) {
     console.error("Error clearing data:", error);

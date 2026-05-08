@@ -1,3 +1,5 @@
+
+
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
@@ -8,10 +10,11 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
 import { addMedication } from "../../utils/storage";
-import { scheduleMedicationReminder, scheduleRefillReminder } from "../../utils/notifications";
-
+import { scheduleMedicationReminder } from "../../utils/nativeAlarm";
+import { scheduleRefillReminder } from "../../utils/notifications";
+ 
 const { width } = Dimensions.get("window");
-
+ 
 // Pure teal palette only
 const C = {
   primary: "#037482",
@@ -28,7 +31,7 @@ const C = {
   surface: "#ffffff",
   danger: "#c0392b",
 };
-
+ 
 const FREQUENCIES = [
   { id: "1", label: "Once daily",   icon: "sunny-outline"    as const, defaultTimes: ["08:00"] },
   { id: "2", label: "Twice daily",  icon: "sync-outline"     as const, defaultTimes: ["08:00", "20:00"] },
@@ -36,7 +39,7 @@ const FREQUENCIES = [
   { id: "4", label: "4× daily",     icon: "repeat-outline"   as const, defaultTimes: ["08:00", "12:00", "16:00", "20:00"] },
   { id: "5", label: "As needed",    icon: "calendar-outline" as const, defaultTimes: [] },
 ];
-
+ 
 const DURATIONS = [
   { id: "1", label: "7 days",   value: 7 },
   { id: "2", label: "14 days",  value: 14 },
@@ -44,33 +47,33 @@ const DURATIONS = [
   { id: "4", label: "90 days",  value: 90 },
   { id: "5", label: "Ongoing",  value: -1 },
 ];
-
+ 
 // All teal shades for color tagging
 const MED_COLORS = [
   "#037482", "#025a64", "#57C3DC", "#D3EEF5",
   "#0a9bb5", "#048fa6", "#2dd4bf", "#0e7490",
 ];
-
+ 
 function timeStringToDate(timeStr: string): Date {
   const [h, m] = timeStr.split(":").map(Number);
   const d = new Date();
   d.setHours(h, m, 0, 0);
   return d;
 }
-
+ 
 function dateToTimeString(date: Date): string {
   const h = date.getHours().toString().padStart(2, "0");
   const m = date.getMinutes().toString().padStart(2, "0");
   return `${h}:${m}`;
 }
-
+ 
 function formatTime12(timeStr: string): string {
   const [h, m] = timeStr.split(":").map(Number);
   const suffix = h >= 12 ? "PM" : "AM";
   const hour = h % 12 === 0 ? 12 : h % 12;
   return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
 }
-
+ 
 // Module-level memoized Field component to avoid re-creation on every render (prevents TextInput focus loss)
 type FieldProps = {
   label: string;
@@ -81,7 +84,7 @@ type FieldProps = {
   onChangeText: (v: string) => void;
   error?: string;
 };
-
+ 
 const Field = React.memo(function Field({ label, placeholder, keyboard, value, onChangeText, error }: FieldProps) {
   return (
     <View style={st.fieldGroup}>
@@ -99,13 +102,13 @@ const Field = React.memo(function Field({ label, placeholder, keyboard, value, o
   );
 });
 Field.displayName = "Field";
-
+ 
 export default function AddMedicationScreen() {
   const router = useRouter();
   const [form, setForm] = useState({
     name: "", dosage: "", frequency: "", duration: "", startDate: new Date(),
-    times: [] as string[], notes: "", reminderEnabled: true, refillReminder: false,
-    currentSupply: "", refillAt: "",
+    times: [] as string[], notes: "", reminderEnabled: true, alarmEnabled: false,
+    refillReminder: false, currentSupply: "", refillAt: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -115,7 +118,7 @@ export default function AddMedicationScreen() {
   const [selectedDuration, setSelectedDuration]   = useState("");
   const [selectedColor, setSelectedColor]         = useState(MED_COLORS[0]);
   const [isSubmitting, setIsSubmitting]           = useState(false);
-
+ 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validate = () => {
     const e: Record<string, string> = {};
@@ -134,7 +137,7 @@ export default function AddMedicationScreen() {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
-
+ 
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!validate()) return;
@@ -151,6 +154,7 @@ export default function AddMedicationScreen() {
         times: form.times,
         notes: form.notes,
         reminderEnabled: form.reminderEnabled,
+        alarmEnabled: form.alarmEnabled,
         refillReminder: form.refillReminder,
         currentSupply: form.currentSupply ? Number(form.currentSupply) : 0,
         totalSupply:   form.currentSupply ? Number(form.currentSupply) : 0,
@@ -169,7 +173,7 @@ export default function AddMedicationScreen() {
       setIsSubmitting(false);
     }
   };
-
+ 
   // ── Frequency select ────────────────────────────────────────────────────────
   const handleFrequency = (label: string) => {
     const found = FREQUENCIES.find(f => f.label === label);
@@ -178,7 +182,7 @@ export default function AddMedicationScreen() {
     if (errors.frequency) setErrors(p => ({ ...p, frequency: "" }));
     if (errors.times)     setErrors(p => ({ ...p, times: "" }));
   };
-
+ 
   // ── Time editing ────────────────────────────────────────────────────────────
   const handleTimeChange = (_: any, date?: Date) => {
     if (Platform.OS === "android") {
@@ -199,9 +203,9 @@ export default function AddMedicationScreen() {
     }
     if (errors.times) setErrors(p => ({ ...p, times: "" }));
   };
-
+ 
   // Field helper was moved to module scope to avoid re-creation on each render (prevents TextInput losing focus)
-
+ 
   return (
     <KeyboardAvoidingView style={st.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {/* Header */}
@@ -214,9 +218,9 @@ export default function AddMedicationScreen() {
           <Text style={st.headerTitle}>Add Medication</Text>
         </View>
       </LinearGradient>
-
+ 
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
+ 
         {/* ── Basic Info ── */}
         <View style={st.card}>
           <Text style={st.cardTitle}>Basic Information</Text>
@@ -236,7 +240,7 @@ export default function AddMedicationScreen() {
             onChangeText={v => { setForm(p => ({ ...p, dosage: v })); if (errors.dosage) setErrors(p => ({ ...p, dosage: "" })); }}
             error={errors.dosage}
           />
-
+ 
           {/* Color tag */}
           <View style={st.fieldGroup}>
             <Text style={st.label}>Color Tag</Text>
@@ -253,7 +257,7 @@ export default function AddMedicationScreen() {
               ))}
             </View>
           </View>
-
+ 
           {/* Notes */}
           <View style={st.fieldGroup}>
             <Text style={st.label}>Notes (optional)</Text>
@@ -268,11 +272,11 @@ export default function AddMedicationScreen() {
             />
           </View>
         </View>
-
+ 
         {/* ── Schedule ── */}
         <View style={st.card}>
           <Text style={st.cardTitle}>Schedule</Text>
-
+ 
           {/* Frequency */}
           <View style={st.fieldGroup}>
             <Text style={st.label}>Frequency *</Text>
@@ -291,7 +295,7 @@ export default function AddMedicationScreen() {
             </View>
             {errors.frequency && <Text style={st.errText}>{errors.frequency}</Text>}
           </View>
-
+ 
           {/* Duration */}
           <View style={st.fieldGroup}>
             <Text style={st.label}>Duration *</Text>
@@ -309,7 +313,7 @@ export default function AddMedicationScreen() {
             </View>
             {errors.duration && <Text style={st.errText}>{errors.duration}</Text>}
           </View>
-
+ 
           {/* Start date */}
           <View style={st.fieldGroup}>
             <Text style={st.label}>Start Date</Text>
@@ -331,7 +335,7 @@ export default function AddMedicationScreen() {
             )}
           </View>
         </View>
-
+ 
         {/* ── Reminder Times ── */}
         <View style={st.card}>
           <View style={st.cardTitleRow}>
@@ -343,9 +347,31 @@ export default function AddMedicationScreen() {
               thumbColor={form.reminderEnabled ? C.primary : "#9ab5bc"}
             />
           </View>
-
+ 
           {form.reminderEnabled && (
             <>
+              {/* Alarm toggle */}
+              <View style={st.alarmRow}>
+                <View style={st.alarmLeft}>
+                  <View style={st.alarmIconWrap}>
+                    <Ionicons name="alarm" size={18} color={form.alarmEnabled ? C.primary : C.textMuted} />
+                  </View>
+                  <View>
+                    <Text style={st.alarmLabel}>Alarm Reminder</Text>
+                    <Text style={st.alarmSub}>
+                      {form.alarmEnabled
+                        ? "Loud alarm will sound at each dose time"
+                        : "Enable for a loud alarm at each dose time"}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={form.alarmEnabled}
+                  onValueChange={v => setForm(p => ({ ...p, alarmEnabled: v }))}
+                  trackColor={{ false: "#c0d8de", true: C.teal40 }}
+                  thumbColor={form.alarmEnabled ? C.primary : "#9ab5bc"}
+                />
+              </View>
               {form.times.length === 0 ? (
                 <View style={st.noTimesBox}>
                   <Ionicons name="time-outline" size={22} color={C.textMuted} />
@@ -373,7 +399,7 @@ export default function AddMedicationScreen() {
                   </View>
                 ))
               )}
-
+ 
               {/* Manual add time */}
               <TouchableOpacity
                 style={st.addTimeBtn}
@@ -388,9 +414,9 @@ export default function AddMedicationScreen() {
                 <Ionicons name="add-circle-outline" size={18} color={C.primary} />
                 <Text style={st.addTimeBtnText}>Add time</Text>
               </TouchableOpacity>
-
+ 
               {errors.times && <Text style={st.errText}>{errors.times}</Text>}
-
+ 
               {/* Time picker modal */}
               {editingTimeIndex !== null && (
                 <>
@@ -411,7 +437,7 @@ export default function AddMedicationScreen() {
             </>
           )}
         </View>
-
+ 
         {/* ── Refill Tracking ── */}
         <View style={st.card}>
           <View style={st.cardTitleRow}>
@@ -426,7 +452,7 @@ export default function AddMedicationScreen() {
               thumbColor={form.refillReminder ? C.primary : "#9ab5bc"}
             />
           </View>
-
+ 
           {form.refillReminder && (
             <View style={st.refillRow}>
               <View style={{ flex: 1 }}>
@@ -456,7 +482,7 @@ export default function AddMedicationScreen() {
             </View>
           )}
         </View>
-
+ 
         {/* ── Save ── */}
         <TouchableOpacity
           style={[st.saveBtn, isSubmitting && { opacity: 0.65 }]}
@@ -469,13 +495,13 @@ export default function AddMedicationScreen() {
             <Text style={st.saveBtnText}>{isSubmitting ? "Saving…" : "Save Medication"}</Text>
           </LinearGradient>
         </TouchableOpacity>
-
+ 
         <View style={{ height: 48 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
+ 
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#eef8fb" },
   header: { paddingTop: Platform.OS === "ios" ? 58 : 38, paddingBottom: 20, overflow: "hidden" },
@@ -519,4 +545,12 @@ const st = StyleSheet.create({
   saveBtn: { borderRadius: 16, overflow: "hidden", shadowColor: "#037482", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 12, elevation: 8, marginTop: 8 },
   saveBtnInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 18, gap: 10 },
   saveBtnText: { color: "white", fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
+  // Alarm row
+  alarmRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#eef8fb", borderRadius: 14, padding: 12, marginBottom: 14, borderWidth: 1.5, borderColor: "#D3EEF5" },
+  alarmLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginRight: 8 },
+  alarmIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#D3EEF5", alignItems: "center", justifyContent: "center" },
+  alarmLabel: { fontSize: 13, fontWeight: "700", color: "#0d2f36" },
+  alarmSub: { fontSize: 11, color: "#7ab5c0", marginTop: 2, maxWidth: 210 },
 });
+ 
+

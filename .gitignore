@@ -1,44 +1,44 @@
 # dependencies
 node_modules/
 
-# expo
+# Expo
 .expo/
 dist/
 web-build/
 
-# native
-*.keystore
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+# Native build folders
+android/.gradle/
+android/app/build/
+android/build/
 
 # logs
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env.local
 
 # macOS
 .DS_Store
 
-# environment variables
-.env
-.env.*
+# Windows
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
 
 # TypeScript
 *.tsbuildinfo
 
-# local editor settings
-.vscode/
-.idea/
+# EAS
+*.keystore
 
-# build outputs
-android/app/build/
-ios/build/
+# Metro
+.metro-health-check*
 
-# eas
-eas-build-local/
-
-# expo generated
-expo-env.d.ts
+# Temporary files
+*.tmp
+*.temp

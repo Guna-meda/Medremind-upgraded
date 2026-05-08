@@ -9,7 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from "react-native-svg";
 import { getMedications, Medication, getTodaysDoses, recordDose, DoseHistory } from "../utils/storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { registerForPushNotificationsAsync, scheduleMedicationReminder } from "../utils/notifications";
+import { canScheduleExactAlarms, ensureAlarmSchedulerReady, updateMedicationReminders } from "../utils/nativeAlarm";
 
 const { width } = Dimensions.get("window");
 
@@ -144,7 +144,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadMedications();
-    setupNotifications();
+    setupNativeAlarms();
     const sub = AppState.addEventListener("change", s => {
       if (s === "active") loadMedications();
     });
@@ -159,15 +159,25 @@ export default function HomeScreen() {
     }, 400);
   }, []);
 
-  const setupNotifications = async () => {
+  const setupNativeAlarms = async () => {
     try {
-      const token = await registerForPushNotificationsAsync();
-      if (!token) return;
+      await ensureAlarmSchedulerReady();
+      const exactAllowed = await canScheduleExactAlarms();
+      if (!exactAllowed) {
+        Alert.alert(
+          "Exact alarms not enabled",
+          "Android exact alarm access is not currently granted. The app will fall back to the alarm-clock API so reminders still ring, but enabling exact alarms is recommended for the most reliable timing.",
+        );
+      }
       const meds = await getMedications();
       for (const med of meds) {
-        if (med.reminderEnabled) await scheduleMedicationReminder(med);
+        if (med.reminderEnabled) {
+          await updateMedicationReminders(med);
+        }
       }
-    } catch {}
+    } catch (error) {
+      console.error("Failed to sync native alarms:", error);
+    }
   };
 
   const handleTake = async (med: Medication) => {
