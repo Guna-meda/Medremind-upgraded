@@ -1,44 +1,63 @@
-# Welcome to your Expo app 👋
+# MedRemind
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native medication management application that helps users manage medicine schedules, track dosage history, monitor refill reminders, and receive real  alarm-based medication alerts.
 
-## Get started
+Built with **React Native**, **Expo**, **TypeScript**, and native **Android Kotlin** modules.
 
-1. Install dependencies
+---
+![alt text](image-2.png)![alt text](image.png)
+![alt text](image-1.png)![alt text](image-3.png)
+![alt text](image-4.png)![alt text](image-5.png)
+## Features
 
-   ```bash
-   npm install
-   ```
+- Medicine reminder scheduling
+- Real Android alarm support
+- Foreground alarm service
+- Refill tracking system
+- Medication history tracking
+- Biometric authentication
+- Modern responsive UI
+- Persistent alarms after device reboot
+- Multiple daily reminder scheduling
 
-2. Start the app
+---
 
-   ```bash
-    npx expo start
-   ```
+## Tech Stack
 
-In the output, you'll find options to open the app in a
+### Frontend
+- React Native
+- Expo
+- TypeScript
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Native Android
+- Kotlin
+- AlarmManager
+- Foreground Services
+- Broadcast Receivers
+- Native Modules
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## Alarm System
 
-When you're ready, run:
+Unlike standard notification-based reminder apps, MedRemind implements a native Android alarm architecture using Kotlin for reliable, exact-time medication alerts.
 
+---
+
+## Running the Project
+
+### Expo Development
 ```bash
-npm run reset-project
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Native Android Build
+```bash
+npx expo run:android
+```
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Build APK
+```bash
+eas build --platform android --profile preview
+```
 
