@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
   Switch, Dimensions, Platform, KeyboardAvoidingView, Alert,
@@ -70,6 +70,35 @@ function formatTime12(timeStr: string): string {
   const hour = h % 12 === 0 ? 12 : h % 12;
   return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
 }
+
+// Module-level memoized Field component to avoid re-creation on every render (prevents TextInput focus loss)
+type FieldProps = {
+  label: string;
+  fkey: string;
+  placeholder: string;
+  keyboard?: any;
+  value: string;
+  onChangeText: (v: string) => void;
+  error?: string;
+};
+
+const Field = React.memo(function Field({ label, placeholder, keyboard, value, onChangeText, error }: FieldProps) {
+  return (
+    <View style={st.fieldGroup}>
+      <Text style={st.label}>{label}</Text>
+      <TextInput
+        style={[st.input, error && st.inputErr]}
+        placeholder={placeholder}
+        placeholderTextColor={C.textMuted}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboard ?? "default"}
+      />
+      {error && <Text style={st.errText}>{error}</Text>}
+    </View>
+  );
+});
+Field.displayName = "Field";
 
 export default function AddMedicationScreen() {
   const router = useRouter();
@@ -171,24 +200,7 @@ export default function AddMedicationScreen() {
     if (errors.times) setErrors(p => ({ ...p, times: "" }));
   };
 
-  // ── Field helper ────────────────────────────────────────────────────────────
-  const Field = ({ label, fkey, placeholder, keyboard }: { label: string; fkey: string; placeholder: string; keyboard?: any }) => (
-    <View style={st.fieldGroup}>
-      <Text style={st.label}>{label}</Text>
-      <TextInput
-        style={[st.input, errors[fkey] && st.inputErr]}
-        placeholder={placeholder}
-        placeholderTextColor={C.textMuted}
-        value={(form as any)[fkey]}
-        onChangeText={v => {
-          setForm(p => ({ ...p, [fkey]: v }));
-          if (errors[fkey]) setErrors(p => ({ ...p, [fkey]: "" }));
-        }}
-        keyboardType={keyboard ?? "default"}
-      />
-      {errors[fkey] && <Text style={st.errText}>{errors[fkey]}</Text>}
-    </View>
-  );
+  // Field helper was moved to module scope to avoid re-creation on each render (prevents TextInput losing focus)
 
   return (
     <KeyboardAvoidingView style={st.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -208,8 +220,22 @@ export default function AddMedicationScreen() {
         {/* ── Basic Info ── */}
         <View style={st.card}>
           <Text style={st.cardTitle}>Basic Information</Text>
-          <Field label="Medication Name *" fkey="name" placeholder="e.g. Aspirin" />
-          <Field label="Dosage *" fkey="dosage" placeholder="e.g. 500mg" />
+          <Field
+            label="Medication Name *"
+            fkey="name"
+            placeholder="e.g. Aspirin"
+            value={form.name}
+            onChangeText={v => { setForm(p => ({ ...p, name: v })); if (errors.name) setErrors(p => ({ ...p, name: "" })); }}
+            error={errors.name}
+          />
+          <Field
+            label="Dosage *"
+            fkey="dosage"
+            placeholder="e.g. 500mg"
+            value={form.dosage}
+            onChangeText={v => { setForm(p => ({ ...p, dosage: v })); if (errors.dosage) setErrors(p => ({ ...p, dosage: "" })); }}
+            error={errors.dosage}
+          />
 
           {/* Color tag */}
           <View style={st.fieldGroup}>
