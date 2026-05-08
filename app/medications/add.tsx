@@ -12,281 +12,485 @@ import { scheduleMedicationReminder, scheduleRefillReminder } from "../../utils/
 
 const { width } = Dimensions.get("window");
 
+// Pure teal palette only
 const C = {
-  primary: "#047382", primaryDark: "#035a66", teal10: "#e8f6f8", teal20: "#c5eaee",
-  bg: "#f0f9fa", text: "#1a2e35", textSub: "#5a8490", textMuted: "#9ab5bc",
-  surface: "#ffffff", danger: "#ef4444",
+  primary: "#037482",
+  primaryDark: "#025a64",
+  primaryLight: "#57C3DC",
+  teal05: "#f0fafc",
+  teal10: "#D3EEF5",
+  teal20: "#a8dce8",
+  teal40: "#57C3DC",
+  bg: "#eef8fb",
+  text: "#0d2f36",
+  textSub: "#3a7580",
+  textMuted: "#7ab5c0",
+  surface: "#ffffff",
+  danger: "#c0392b",
 };
 
 const FREQUENCIES = [
-  { id: "1", label: "Once daily", icon: "sunny-outline" as const, times: ["09:00"] },
-  { id: "2", label: "Twice daily", icon: "sync-outline" as const, times: ["09:00", "21:00"] },
-  { id: "3", label: "3× daily", icon: "time-outline" as const, times: ["09:00", "15:00", "21:00"] },
-  { id: "4", label: "4× daily", icon: "repeat-outline" as const, times: ["09:00", "13:00", "17:00", "21:00"] },
-  { id: "5", label: "As needed", icon: "calendar-outline" as const, times: [] },
+  { id: "1", label: "Once daily",   icon: "sunny-outline"    as const, defaultTimes: ["08:00"] },
+  { id: "2", label: "Twice daily",  icon: "sync-outline"     as const, defaultTimes: ["08:00", "20:00"] },
+  { id: "3", label: "3× daily",     icon: "time-outline"     as const, defaultTimes: ["08:00", "14:00", "20:00"] },
+  { id: "4", label: "4× daily",     icon: "repeat-outline"   as const, defaultTimes: ["08:00", "12:00", "16:00", "20:00"] },
+  { id: "5", label: "As needed",    icon: "calendar-outline" as const, defaultTimes: [] },
 ];
 
 const DURATIONS = [
-  { id: "1", label: "7 days", value: 7 },
-  { id: "2", label: "14 days", value: 14 },
-  { id: "3", label: "30 days", value: 30 },
-  { id: "4", label: "90 days", value: 90 },
-  { id: "5", label: "Ongoing", value: -1 },
+  { id: "1", label: "7 days",   value: 7 },
+  { id: "2", label: "14 days",  value: 14 },
+  { id: "3", label: "30 days",  value: 30 },
+  { id: "4", label: "90 days",  value: 90 },
+  { id: "5", label: "Ongoing",  value: -1 },
 ];
 
-const MED_COLORS = ["#047382", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#3b82f6", "#ec4899"];
+// All teal shades for color tagging
+const MED_COLORS = [
+  "#037482", "#025a64", "#57C3DC", "#D3EEF5",
+  "#0a9bb5", "#048fa6", "#2dd4bf", "#0e7490",
+];
+
+function timeStringToDate(timeStr: string): Date {
+  const [h, m] = timeStr.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function dateToTimeString(date: Date): string {
+  const h = date.getHours().toString().padStart(2, "0");
+  const m = date.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function formatTime12(timeStr: string): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
+}
 
 export default function AddMedicationScreen() {
   const router = useRouter();
   const [form, setForm] = useState({
     name: "", dosage: "", frequency: "", duration: "", startDate: new Date(),
-    times: ["09:00"], notes: "", reminderEnabled: true, refillReminder: false,
+    times: [] as string[], notes: "", reminderEnabled: true, refillReminder: false,
     currentSupply: "", refillAt: "",
   });
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Time picker: track which index is being edited, null = closed
+  const [editingTimeIndex, setEditingTimeIndex] = useState<number | null>(null);
   const [selectedFrequency, setSelectedFrequency] = useState("");
-  const [selectedDuration, setSelectedDuration] = useState("");
-  const [selectedColor, setSelectedColor] = useState(MED_COLORS[0]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDuration, setSelectedDuration]   = useState("");
+  const [selectedColor, setSelectedColor]         = useState(MED_COLORS[0]);
+  const [isSubmitting, setIsSubmitting]           = useState(false);
 
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
-    if (!form.name.trim()) newErrors.name = "Name is required";
-    if (!form.dosage.trim()) newErrors.dosage = "Dosage is required";
-    if (!form.frequency) newErrors.frequency = "Frequency is required";
-    if (!form.duration) newErrors.duration = "Duration is required";
+  // ── Validation ─────────────────────────────────────────────────────────────
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.name.trim())    e.name      = "Medication name is required";
+    if (!form.dosage.trim())  e.dosage    = "Dosage is required";
+    if (!form.frequency)      e.frequency = "Select a frequency";
+    if (!form.duration)       e.duration  = "Select a duration";
+    if (form.reminderEnabled && form.times.length === 0)
+      e.times = "Set at least one reminder time";
     if (form.refillReminder) {
-      if (!form.currentSupply) newErrors.currentSupply = "Current supply required";
-      if (!form.refillAt) newErrors.refillAt = "Refill threshold required";
-      if (Number(form.refillAt) >= Number(form.currentSupply)) newErrors.refillAt = "Must be less than supply";
+      if (!form.currentSupply) e.currentSupply = "Current supply required";
+      if (!form.refillAt)      e.refillAt = "Alert threshold required";
+      if (Number(form.refillAt) >= Number(form.currentSupply))
+        e.refillAt = "Must be less than supply";
     }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
+  // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!validateForm()) { Alert.alert("Please fix the errors", "Some required fields need attention."); return; }
+    if (!validate()) return;
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const medicationData = {
+      const med = {
         id: Math.random().toString(36).substr(2, 9),
-        ...form,
-        currentSupply: form.currentSupply ? Number(form.currentSupply) : 0,
-        totalSupply: form.currentSupply ? Number(form.currentSupply) : 0,
-        refillAt: form.refillAt ? Number(form.refillAt) : 0,
+        name: form.name.trim(),
+        dosage: form.dosage.trim(),
+        frequency: form.frequency,
+        duration: form.duration,
         startDate: form.startDate.toISOString(),
+        times: form.times,
+        notes: form.notes,
+        reminderEnabled: form.reminderEnabled,
+        refillReminder: form.refillReminder,
+        currentSupply: form.currentSupply ? Number(form.currentSupply) : 0,
+        totalSupply:   form.currentSupply ? Number(form.currentSupply) : 0,
+        refillAt:      form.refillAt      ? Number(form.refillAt)      : 0,
         color: selectedColor,
       };
-      await addMedication(medicationData);
-      if (medicationData.reminderEnabled) await scheduleMedicationReminder(medicationData);
-      if (medicationData.refillReminder) await scheduleRefillReminder(medicationData);
-      Alert.alert("Added!", "Medication added successfully.", [{ text: "OK", onPress: () => router.back() }], { cancelable: false });
-    } catch (error) {
-      Alert.alert("Error", "Failed to save medication. Please try again.");
+      await addMedication(med);
+      if (med.reminderEnabled) await scheduleMedicationReminder(med);
+      if (med.refillReminder)  await scheduleRefillReminder(med);
+      Alert.alert("Saved!", `${med.name} has been added.`, [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch {
+      Alert.alert("Error", "Could not save. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleFrequencySelect = (freq: string) => {
-    setSelectedFrequency(freq);
-    const found = FREQUENCIES.find(f => f.label === freq);
-    setForm(prev => ({ ...prev, frequency: freq, times: found?.times || [] }));
-    if (errors.frequency) setErrors(prev => ({ ...prev, frequency: "" }));
+  // ── Frequency select ────────────────────────────────────────────────────────
+  const handleFrequency = (label: string) => {
+    const found = FREQUENCIES.find(f => f.label === label);
+    setSelectedFrequency(label);
+    setForm(p => ({ ...p, frequency: label, times: [...(found?.defaultTimes ?? [])] }));
+    if (errors.frequency) setErrors(p => ({ ...p, frequency: "" }));
+    if (errors.times)     setErrors(p => ({ ...p, times: "" }));
   };
 
-  const handleDurationSelect = (dur: string) => {
-    setSelectedDuration(dur);
-    setForm(prev => ({ ...prev, duration: dur }));
-    if (errors.duration) setErrors(prev => ({ ...prev, duration: "" }));
+  // ── Time editing ────────────────────────────────────────────────────────────
+  const handleTimeChange = (_: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      // Android fires once then closes
+      if (date && editingTimeIndex !== null) {
+        const updated = [...form.times];
+        updated[editingTimeIndex] = dateToTimeString(date);
+        setForm(p => ({ ...p, times: updated }));
+      }
+      setEditingTimeIndex(null);
+    } else {
+      // iOS: update live, close via "Done"
+      if (date && editingTimeIndex !== null) {
+        const updated = [...form.times];
+        updated[editingTimeIndex] = dateToTimeString(date);
+        setForm(p => ({ ...p, times: updated }));
+      }
+    }
+    if (errors.times) setErrors(p => ({ ...p, times: "" }));
   };
 
-  const field = (label: string, key: string, placeholder: string, extra?: any) => (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+  // ── Field helper ────────────────────────────────────────────────────────────
+  const Field = ({ label, fkey, placeholder, keyboard }: { label: string; fkey: string; placeholder: string; keyboard?: any }) => (
+    <View style={st.fieldGroup}>
+      <Text style={st.label}>{label}</Text>
       <TextInput
-        style={[styles.input, errors[key] && styles.inputError]}
+        style={[st.input, errors[fkey] && st.inputErr]}
         placeholder={placeholder}
         placeholderTextColor={C.textMuted}
-        value={(form as any)[key]}
-        onChangeText={(v) => { setForm(prev => ({ ...prev, [key]: v })); if (errors[key]) setErrors(prev => ({ ...prev, [key]: "" })); }}
-        {...extra}
+        value={(form as any)[fkey]}
+        onChangeText={v => {
+          setForm(p => ({ ...p, [fkey]: v }));
+          if (errors[fkey]) setErrors(p => ({ ...p, [fkey]: "" }));
+        }}
+        keyboardType={keyboard ?? "default"}
       />
-      {errors[key] && <Text style={styles.errorText}><Ionicons name="alert-circle-outline" size={12} /> {errors[key]}</Text>}
+      {errors[fkey] && <Text style={st.errText}>{errors[fkey]}</Text>}
     </View>
   );
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <LinearGradient colors={[C.primaryDark, C.primary]} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <View style={styles.headerDec} />
-        <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+    <KeyboardAvoidingView style={st.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      {/* Header */}
+      <LinearGradient colors={[C.primaryDark, C.primary]} style={st.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <View style={st.headerDec} />
+        <View style={st.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
             <Ionicons name="chevron-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Medication</Text>
+          <Text style={st.headerTitle}>Add Medication</Text>
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-        {/* Basic Info */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Basic Information</Text>
-          {field("Medication Name *", "name", "e.g. Aspirin")}
-          {field("Dosage *", "dosage", "e.g. 500mg", { keyboardType: "default" })}
+        {/* ── Basic Info ── */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>Basic Information</Text>
+          <Field label="Medication Name *" fkey="name" placeholder="e.g. Aspirin" />
+          <Field label="Dosage *" fkey="dosage" placeholder="e.g. 500mg" />
 
-          {/* Color Picker */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Color Tag</Text>
-            <View style={styles.colorRow}>
+          {/* Color tag */}
+          <View style={st.fieldGroup}>
+            <Text style={st.label}>Color Tag</Text>
+            <View style={st.colorRow}>
               {MED_COLORS.map(c => (
-                <TouchableOpacity key={c} style={[styles.colorDot, { backgroundColor: c }, selectedColor === c && styles.colorDotSelected]} onPress={() => setSelectedColor(c)} activeOpacity={0.8}>
-                  {selectedColor === c && <Ionicons name="checkmark" size={14} color="white" />}
+                <TouchableOpacity
+                  key={c}
+                  style={[st.colorDot, { backgroundColor: c }, selectedColor === c && st.colorDotSel]}
+                  onPress={() => setSelectedColor(c)}
+                  activeOpacity={0.8}
+                >
+                  {selectedColor === c && <Ionicons name="checkmark" size={13} color="white" />}
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput style={[styles.input, styles.inputMulti]} placeholder="e.g. Take with food" placeholderTextColor={C.textMuted} value={form.notes} onChangeText={v => setForm(prev => ({ ...prev, notes: v }))} multiline numberOfLines={3} />
+          {/* Notes */}
+          <View style={st.fieldGroup}>
+            <Text style={st.label}>Notes (optional)</Text>
+            <TextInput
+              style={[st.input, st.inputMulti]}
+              placeholder="e.g. Take with food, avoid sunlight…"
+              placeholderTextColor={C.textMuted}
+              value={form.notes}
+              onChangeText={v => setForm(p => ({ ...p, notes: v }))}
+              multiline
+              numberOfLines={3}
+            />
           </View>
         </View>
 
-        {/* Schedule */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Schedule</Text>
+        {/* ── Schedule ── */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>Schedule</Text>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Frequency *</Text>
-            <View style={styles.chipGrid}>
+          {/* Frequency */}
+          <View style={st.fieldGroup}>
+            <Text style={st.label}>Frequency *</Text>
+            <View style={st.chipRow}>
               {FREQUENCIES.map(f => (
-                <TouchableOpacity key={f.id} style={[styles.chip, selectedFrequency === f.label && styles.chipSelected]} onPress={() => handleFrequencySelect(f.label)} activeOpacity={0.8}>
-                  <Ionicons name={f.icon} size={16} color={selectedFrequency === f.label ? "white" : C.primary} />
-                  <Text style={[styles.chipText, selectedFrequency === f.label && styles.chipTextSelected]}>{f.label}</Text>
+                <TouchableOpacity
+                  key={f.id}
+                  style={[st.chip, selectedFrequency === f.label && st.chipSel]}
+                  onPress={() => handleFrequency(f.label)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={f.icon} size={15} color={selectedFrequency === f.label ? "white" : C.primary} />
+                  <Text style={[st.chipText, selectedFrequency === f.label && st.chipTextSel]}>{f.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {errors.frequency && <Text style={styles.errorText}>{errors.frequency}</Text>}
+            {errors.frequency && <Text style={st.errText}>{errors.frequency}</Text>}
           </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Duration *</Text>
-            <View style={styles.chipGrid}>
+          {/* Duration */}
+          <View style={st.fieldGroup}>
+            <Text style={st.label}>Duration *</Text>
+            <View style={st.chipRow}>
               {DURATIONS.map(d => (
-                <TouchableOpacity key={d.id} style={[styles.chip, selectedDuration === d.label && styles.chipSelected]} onPress={() => handleDurationSelect(d.label)} activeOpacity={0.8}>
-                  <Text style={[styles.chipText, selectedDuration === d.label && styles.chipTextSelected]}>{d.label}</Text>
+                <TouchableOpacity
+                  key={d.id}
+                  style={[st.chip, selectedDuration === d.label && st.chipSel]}
+                  onPress={() => { setSelectedDuration(d.label); setForm(p => ({ ...p, duration: d.label })); if (errors.duration) setErrors(p => ({ ...p, duration: "" })); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[st.chipText, selectedDuration === d.label && st.chipTextSel]}>{d.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {errors.duration && <Text style={styles.errorText}>{errors.duration}</Text>}
+            {errors.duration && <Text style={st.errText}>{errors.duration}</Text>}
           </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Start Date</Text>
-            <TouchableOpacity style={styles.datePicker} onPress={() => setShowDatePicker(true)}>
+          {/* Start date */}
+          <View style={st.fieldGroup}>
+            <Text style={st.label}>Start Date</Text>
+            <TouchableOpacity style={st.rowPicker} onPress={() => setShowDatePicker(true)}>
               <Ionicons name="calendar-outline" size={18} color={C.primary} />
-              <Text style={styles.datePickerText}>{form.startDate.toLocaleDateString("default", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</Text>
+              <Text style={st.rowPickerText}>
+                {form.startDate.toLocaleDateString("default", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}
+              </Text>
               <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
             </TouchableOpacity>
             {showDatePicker && (
-              <DateTimePicker value={form.startDate} mode="date" display="default" onChange={(_, d) => { setShowDatePicker(false); if (d) setForm(prev => ({ ...prev, startDate: d })); }} minimumDate={new Date()} />
+              <DateTimePicker
+                value={form.startDate}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={(_, d) => { setShowDatePicker(false); if (d) setForm(p => ({ ...p, startDate: d })); }}
+              />
             )}
           </View>
         </View>
 
-        {/* Reminders */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Reminders</Text>
-
-          <View style={styles.switchRow}>
-            <View style={styles.switchMeta}>
-              <Text style={styles.switchLabel}>Dose reminders</Text>
-              <Text style={styles.switchSub}>Get notified when it's time to take your medication</Text>
-            </View>
-            <Switch value={form.reminderEnabled} onValueChange={v => setForm(prev => ({ ...prev, reminderEnabled: v }))} trackColor={{ false: "#d1d5db", true: "#80bcc4" }} thumbColor={form.reminderEnabled ? C.primary : "#f4f4f5"} />
+        {/* ── Reminder Times ── */}
+        <View style={st.card}>
+          <View style={st.cardTitleRow}>
+            <Text style={st.cardTitle}>Reminder Times</Text>
+            <Switch
+              value={form.reminderEnabled}
+              onValueChange={v => setForm(p => ({ ...p, reminderEnabled: v }))}
+              trackColor={{ false: "#c0d8de", true: C.teal40 }}
+              thumbColor={form.reminderEnabled ? C.primary : "#9ab5bc"}
+            />
           </View>
 
-          <View style={styles.switchRow}>
-            <View style={styles.switchMeta}>
-              <Text style={styles.switchLabel}>Refill tracking</Text>
-              <Text style={styles.switchSub}>Get reminded before you run out</Text>
+          {form.reminderEnabled && (
+            <>
+              {form.times.length === 0 ? (
+                <View style={st.noTimesBox}>
+                  <Ionicons name="time-outline" size={22} color={C.textMuted} />
+                  <Text style={st.noTimesText}>
+                    {selectedFrequency
+                      ? "No times set. Select a frequency above to auto-fill, or add manually."
+                      : "Select a frequency above to auto-fill times, or add manually."}
+                  </Text>
+                </View>
+              ) : (
+                form.times.map((t, i) => (
+                  <View key={i} style={st.timeRow}>
+                    <View style={st.timeIconWrap}>
+                      <Ionicons name="alarm-outline" size={18} color={C.primary} />
+                    </View>
+                    <Text style={st.timeDoseLabel}>Dose {i + 1}</Text>
+                    <TouchableOpacity
+                      style={st.timePill}
+                      onPress={() => setEditingTimeIndex(i)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={st.timePillText}>{formatTime12(t)}</Text>
+                      <Ionicons name="pencil-outline" size={13} color={C.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+
+              {/* Manual add time */}
+              <TouchableOpacity
+                style={st.addTimeBtn}
+                onPress={() => {
+                  const updated = [...form.times, "09:00"];
+                  setForm(p => ({ ...p, times: updated }));
+                  setEditingTimeIndex(updated.length - 1);
+                  if (errors.times) setErrors(p => ({ ...p, times: "" }));
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={C.primary} />
+                <Text style={st.addTimeBtnText}>Add time</Text>
+              </TouchableOpacity>
+
+              {errors.times && <Text style={st.errText}>{errors.times}</Text>}
+
+              {/* Time picker modal */}
+              {editingTimeIndex !== null && (
+                <>
+                  <DateTimePicker
+                    value={timeStringToDate(form.times[editingTimeIndex] ?? "09:00")}
+                    mode="time"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleTimeChange}
+                    is24Hour={false}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity style={st.doneBtn} onPress={() => setEditingTimeIndex(null)}>
+                      <Text style={st.doneBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* ── Refill Tracking ── */}
+        <View style={st.card}>
+          <View style={st.cardTitleRow}>
+            <View>
+              <Text style={st.cardTitle}>Refill Tracking</Text>
+              <Text style={st.cardSub}>Get alerted before you run out</Text>
             </View>
-            <Switch value={form.refillReminder} onValueChange={v => setForm(prev => ({ ...prev, refillReminder: v }))} trackColor={{ false: "#d1d5db", true: "#80bcc4" }} thumbColor={form.refillReminder ? C.primary : "#f4f4f5"} />
+            <Switch
+              value={form.refillReminder}
+              onValueChange={v => setForm(p => ({ ...p, refillReminder: v }))}
+              trackColor={{ false: "#c0d8de", true: C.teal40 }}
+              thumbColor={form.refillReminder ? C.primary : "#9ab5bc"}
+            />
           </View>
 
           {form.refillReminder && (
-            <View style={styles.refillFields}>
+            <View style={st.refillRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Current supply (units)</Text>
-                <TextInput style={[styles.input, errors.currentSupply && styles.inputError]} placeholder="e.g. 30" placeholderTextColor={C.textMuted} value={form.currentSupply} onChangeText={v => setForm(prev => ({ ...prev, currentSupply: v }))} keyboardType="numeric" />
-                {errors.currentSupply && <Text style={styles.errorText}>{errors.currentSupply}</Text>}
+                <Text style={st.label}>Current supply (units)</Text>
+                <TextInput
+                  style={[st.input, errors.currentSupply && st.inputErr]}
+                  placeholder="e.g. 30"
+                  placeholderTextColor={C.textMuted}
+                  value={form.currentSupply}
+                  onChangeText={v => { setForm(p => ({ ...p, currentSupply: v })); if (errors.currentSupply) setErrors(p => ({ ...p, currentSupply: "" })); }}
+                  keyboardType="numeric"
+                />
+                {errors.currentSupply && <Text style={st.errText}>{errors.currentSupply}</Text>}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Alert when below</Text>
-                <TextInput style={[styles.input, errors.refillAt && styles.inputError]} placeholder="e.g. 7" placeholderTextColor={C.textMuted} value={form.refillAt} onChangeText={v => setForm(prev => ({ ...prev, refillAt: v }))} keyboardType="numeric" />
-                {errors.refillAt && <Text style={styles.errorText}>{errors.refillAt}</Text>}
+                <Text style={st.label}>Alert when below</Text>
+                <TextInput
+                  style={[st.input, errors.refillAt && st.inputErr]}
+                  placeholder="e.g. 7"
+                  placeholderTextColor={C.textMuted}
+                  value={form.refillAt}
+                  onChangeText={v => { setForm(p => ({ ...p, refillAt: v })); if (errors.refillAt) setErrors(p => ({ ...p, refillAt: "" })); }}
+                  keyboardType="numeric"
+                />
+                {errors.refillAt && <Text style={st.errText}>{errors.refillAt}</Text>}
               </View>
             </View>
           )}
         </View>
 
-        {/* Save Button */}
-        <TouchableOpacity style={[styles.saveBtn, isSubmitting && { opacity: 0.7 }]} onPress={handleSave} disabled={isSubmitting} activeOpacity={0.85}>
-          <LinearGradient colors={[C.primary, C.primaryDark]} style={styles.saveBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {isSubmitting ? (
-              <Text style={styles.saveBtnText}>Saving...</Text>
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={22} color="white" />
-                <Text style={styles.saveBtnText}>Save Medication</Text>
-              </>
-            )}
+        {/* ── Save ── */}
+        <TouchableOpacity
+          style={[st.saveBtn, isSubmitting && { opacity: 0.65 }]}
+          onPress={handleSave}
+          disabled={isSubmitting}
+          activeOpacity={0.85}
+        >
+          <LinearGradient colors={[C.primary, C.primaryDark]} style={st.saveBtnInner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <Ionicons name={isSubmitting ? "hourglass-outline" : "checkmark-circle-outline"} size={22} color="white" />
+            <Text style={st.saveBtnText}>{isSubmitting ? "Saving…" : "Save Medication"}</Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 48 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  header: { paddingTop: Platform.OS === "ios" ? 56 : 36, paddingBottom: 20, overflow: "hidden" },
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#eef8fb" },
+  header: { paddingTop: Platform.OS === "ios" ? 58 : 38, paddingBottom: 20, overflow: "hidden" },
   headerDec: { position: "absolute", top: -40, right: -50, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,255,255,0.07)" },
-  headerTop: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16 },
+  headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16 },
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontSize: 22, fontWeight: "800", color: "white", marginLeft: 12 },
-  content: { padding: 16 },
-  card: { backgroundColor: "white", borderRadius: 20, padding: 18, marginBottom: 14, shadowColor: "#047382", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3 },
-  cardTitle: { fontSize: 16, fontWeight: "800", color: C.text, marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#f0f4f5" },
+  scroll: { padding: 16 },
+  card: { backgroundColor: "white", borderRadius: 20, padding: 18, marginBottom: 14, shadowColor: "#037482", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3 },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: "#0d2f36", marginBottom: 4 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#edf6f8" },
+  cardSub: { fontSize: 12, color: "#7ab5c0", marginTop: 2 },
   fieldGroup: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: "600", color: C.textSub, marginBottom: 8 },
-  input: { backgroundColor: C.teal10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: C.text, borderWidth: 1.5, borderColor: "transparent" },
-  inputError: { borderColor: C.danger, backgroundColor: "#fff5f5" },
+  label: { fontSize: 12, fontWeight: "700", color: "#3a7580", marginBottom: 7, textTransform: "uppercase", letterSpacing: 0.5 },
+  input: { backgroundColor: "#D3EEF5", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: "#0d2f36", borderWidth: 1.5, borderColor: "transparent" },
+  inputErr: { borderColor: "#c0392b", backgroundColor: "#fdf0ef" },
   inputMulti: { height: 80, textAlignVertical: "top", paddingTop: 12 },
-  errorText: { fontSize: 12, color: C.danger, marginTop: 5 },
-  colorRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  errText: { fontSize: 12, color: "#c0392b", marginTop: 5 },
+  colorRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   colorDot: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 },
-  colorDotSelected: { transform: [{ scale: 1.15 }], shadowOpacity: 0.3 },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: C.teal10, borderWidth: 1.5, borderColor: "transparent" },
-  chipSelected: { backgroundColor: C.primary, borderColor: C.primary },
-  chipText: { fontSize: 13, fontWeight: "600", color: C.primary },
-  chipTextSelected: { color: "white" },
-  datePicker: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.teal10, borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: "transparent" },
-  datePickerText: { flex: 1, fontSize: 14, color: C.text, fontWeight: "500" },
-  switchRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f0f4f5", gap: 12 },
-  switchMeta: { flex: 1 },
-  switchLabel: { fontSize: 14, fontWeight: "600", color: C.text },
-  switchSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
-  refillFields: { flexDirection: "row", gap: 12, marginTop: 16 },
-  saveBtn: { borderRadius: 16, overflow: "hidden", shadowColor: C.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8, marginTop: 8 },
-  saveBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 18, gap: 10 },
+  colorDotSel: { transform: [{ scale: 1.18 }] },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 12, backgroundColor: "#D3EEF5", borderWidth: 1.5, borderColor: "transparent" },
+  chipSel: { backgroundColor: "#037482", borderColor: "#037482" },
+  chipText: { fontSize: 13, fontWeight: "600", color: "#037482" },
+  chipTextSel: { color: "white" },
+  rowPicker: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#D3EEF5", borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: "transparent" },
+  rowPickerText: { flex: 1, fontSize: 14, color: "#0d2f36", fontWeight: "500" },
+  noTimesBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: "#eef8fb", borderRadius: 12, padding: 14, marginBottom: 12 },
+  noTimesText: { flex: 1, fontSize: 13, color: "#7ab5c0", lineHeight: 19 },
+  timeRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#edf6f8" },
+  timeIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#D3EEF5", alignItems: "center", justifyContent: "center" },
+  timeDoseLabel: { flex: 1, fontSize: 14, fontWeight: "600", color: "#0d2f36" },
+  timePill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#D3EEF5", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: "#57C3DC" },
+  timePillText: { fontSize: 14, fontWeight: "700", color: "#037482" },
+  addTimeBtn: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12, alignSelf: "flex-start", paddingVertical: 6 },
+  addTimeBtnText: { fontSize: 14, color: "#037482", fontWeight: "600" },
+  doneBtn: { alignSelf: "flex-end", marginTop: 8, paddingHorizontal: 20, paddingVertical: 9, backgroundColor: "#037482", borderRadius: 12 },
+  doneBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
+  refillRow: { flexDirection: "row", gap: 12, marginTop: 4 },
+  saveBtn: { borderRadius: 16, overflow: "hidden", shadowColor: "#037482", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 12, elevation: 8, marginTop: 8 },
+  saveBtnInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 18, gap: 10 },
   saveBtnText: { color: "white", fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
 });

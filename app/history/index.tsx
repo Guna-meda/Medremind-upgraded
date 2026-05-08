@@ -7,9 +7,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { getDoseHistory, getMedications, DoseHistory, Medication, clearAllData } from "../../utils/storage";
 
 const C = {
-  primary: "#047382", primaryDark: "#035a66", teal10: "#e8f6f8",
-  bg: "#f0f9fa", text: "#1a2e35", textSub: "#5a8490", textMuted: "#9ab5bc",
-  success: "#10b981", danger: "#ef4444", warning: "#f59e0b",
+  primary: "#037482", primaryDark: "#025a64", teal10: "#D3EEF5",
+  bg: "#eef8fb", text: "#1a2e35", textSub: "#5a8490", textMuted: "#9ab5bc",
+  success: "#0d9488", danger: "#0891b2", warning: "#048fa6",
 };
 
 type EnrichedDoseHistory = DoseHistory & { medication?: Medication };
@@ -61,7 +61,7 @@ export default function HistoryScreen() {
   };
 
   const getMedColor = (i: number) => {
-    const colors = [C.primary, "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#3b82f6"];
+    const colors = [C.primary, "#10b981", "#048fa6", "#0a9bb5", "#0891b2", "#57C3DC"];
     return colors[i % colors.length];
   };
 
@@ -127,7 +127,7 @@ export default function HistoryScreen() {
               </View>
               {doses.map((dose, i) => (
                 <View key={dose.id} style={styles.doseItem}>
-                  <View style={[styles.doseIconWrap, { backgroundColor: dose.taken ? "#d1fae5" : "#fee2e2" }]}>
+                  <View style={[styles.doseIconWrap, { backgroundColor: dose.taken ? "#ccf0ec" : "#fde9e7" }]}>
                     <Ionicons name={dose.taken ? "checkmark-circle" : "close-circle"} size={20} color={dose.taken ? C.success : C.danger} />
                   </View>
                   <View style={styles.doseItemInfo}>
@@ -135,7 +135,7 @@ export default function HistoryScreen() {
                     <Text style={styles.doseItemDosage}>{dose.medication?.dosage}</Text>
                   </View>
                   <View style={styles.doseRight}>
-                    <View style={[styles.doseBadge, { backgroundColor: dose.taken ? "#d1fae5" : "#fee2e2" }]}>
+                    <View style={[styles.doseBadge, { backgroundColor: dose.taken ? "#ccf0ec" : "#fde9e7" }]}>
                       <Text style={[styles.doseBadgeText, { color: dose.taken ? C.success : C.danger }]}>
                         {dose.taken ? "Taken" : "Missed"}
                       </Text>
